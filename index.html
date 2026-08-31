@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Carte d'exploration</title>
+
+  <!-- Leaflet : moteur de la carte -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: white;
+      padding: 10px 16px;
+      border-radius: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #locate {
+      position: absolute;
+      bottom: 25px;
+      right: 20px;
+      z-index: 1000;
+      border: none;
+      border-radius: 50%;
+      width: 55px;
+      height: 55px;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-size: 25px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="status">📍 Recherche de ta position...</div>
+
+  <button id="locate">📍</button>
+
+  <div id="map"></div>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // Rayon d'exploration :
+    // 50 mètres de diamètre = 25 mètres de rayon
+    const EXPLORATION_RADIUS = 25;
+
+    let map;
+    let positionMarker;
+    let accuracyCircle;
+    let explorationCircle;
+
+    // Création de la carte
+    map = L.map("map").setView([46.603354, 1.888334], 6);
+
+    // Carte OpenStreetMap
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap contributors"
+      }
+    ).addTo(map);
+
+    // Fonction appelée lorsque le GPS trouve ta position
+    function updatePosition(position) {
+
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+
+      const currentPosition = [latitude, longitude];
+
+      // Première fois : création du marqueur
+      if (!positionMarker) {
+
+        positionMarker = L.marker(currentPosition)
+          .addTo(map)
+          .bindPopup("📍 Tu es ici");
+
+        map.setView(currentPosition, 18);
+
+      } else {
+
+        positionMarker.setLatLng(currentPosition);
+
+      }
+
+      // Cercle indiquant la précision du GPS
+      if (!accuracyCircle) {
+
+        accuracyCircle = L.circle(currentPosition, {
+          radius: accuracy,
+          color: "#3388ff",
+          fillOpacity: 0.08,
+          weight: 1
+        }).addTo(map);
+
+      } else {
+
+        accuracyCircle.setLatLng(currentPosition);
+        accuracyCircle.setRadius(accuracy);
+
+      }
+
+      // Ton cercle d'exploration de 50 m de diamètre
+      if (!explorationCircle) {
+
+        explorationCircle = L.circle(currentPosition, {
+          radius: EXPLORATION_RADIUS,
+          color: "#00aaff",
+          fillColor: "#00aaff",
+          fillOpacity: 0.18,
+          weight: 2
+        }).addTo(map);
+
+      } else {
+
+        explorationCircle.setLatLng(currentPosition);
+
+      }
+
+      document.getElementById("status").textContent =
+        "🟢 GPS actif • précision ±" + Math.round(accuracy) + " m";
+    }
+
+    // Erreur GPS
+    function gpsError(error) {
+
+      document.getElementById("status").textContent =
+        "❌ Impossible d'obtenir ta position GPS";
+
+      console.log(error);
+    }
+
+    // Démarrage du GPS
+    function startGPS() {
+
+      if (!navigator.geolocation) {
+
+        document.getElementById("status").textContent =
+          "❌ Ton téléphone ne permet pas la géolocalisation";
+
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+        updatePosition,
+        gpsError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 3000,
+          timeout: 10000
+        }
+      );
+    }
+
+    // Bouton pour revenir à sa position
+    document.getElementById("locate").addEventListener("click", function() {
+
+      if (positionMarker) {
+
+        map.setView(
+          positionMarker.getLatLng(),
+          18
+        );
+
+      }
+    });
+
+    startGPS();
+  </script>
+
+</body>
+</html>
