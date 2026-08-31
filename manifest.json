@@ -1,0 +1,11 @@
+{
+  "name": "Carte d'exploration",
+  "short_name": "Exploration",
+  "description": "Explore le monde réel comme dans un jeu vidéo.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#222222",
+  "theme_color": "#222222",
+  "icons": []
+}
