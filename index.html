@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#222222">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -60,7 +62,11 @@
     }
   </style>
 </head>
-
+  <script>
+    if ("serviceWorker" in navigator) {
+navigator.serviceWorker.register("sw.js");
+  }
+  </script>
 <body>
 
   <div id="status">📍 Recherche de ta position...</div>
