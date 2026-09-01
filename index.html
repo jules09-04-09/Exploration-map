@@ -38,7 +38,7 @@
       top: 15px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 1000;
+      z-index: 2000;
       background: white;
       padding: 10px 16px;
       border-radius: 20px;
@@ -52,7 +52,7 @@
       position: absolute;
       bottom: 25px;
       right: 20px;
-      z-index: 1000;
+      z-index: 2000;
       border: none;
       border-radius: 50%;
       width: 55px;
@@ -66,7 +66,7 @@
       position: absolute;
       bottom: 25px;
       left: 20px;
-      z-index: 1000;
+      z-index: 2000;
       border: none;
       border-radius: 20px;
       padding: 12px 16px;
@@ -91,22 +91,22 @@
   <script>
 
     /*
-      =====================================================
-      CONFIGURATION
-      =====================================================
+    =====================================================
+    CONFIGURATION
+    =====================================================
     */
 
     // 50 mètres de diamètre = 25 mètres de rayon
     const EXPLORATION_RADIUS = 25;
 
-    // Distance minimale entre deux zones enregistrées
+    // Distance minimale entre deux points enregistrés
     const MIN_DISTANCE = 15;
 
 
     /*
-      =====================================================
-      CARTE
-      =====================================================
+    =====================================================
+    CARTE
+    =====================================================
     */
 
     const map = L.map("map").setView(
@@ -124,13 +124,10 @@
 
 
     /*
-      =====================================================
-      VARIABLES
-      =====================================================
+    =====================================================
+    DONNEES
+    =====================================================
     */
-
-    let positionMarker = null;
-    let explorationCircle = null;
 
     let exploredZones =
       JSON.parse(
@@ -139,12 +136,47 @@
 
 
     /*
-      =====================================================
-      AFFICHAGE DES ZONES EXPLOREES
-      =====================================================
+    =====================================================
+    COUCHE DES ZONES EXPLOREES
+    =====================================================
     */
 
-    const exploredLayer = L.layerGroup().addTo(map);
+    const exploredLayer =
+      L.layerGroup().addTo(map);
+
+
+    /*
+    =====================================================
+    BROUILLARD
+    =====================================================
+    
+    On crée un énorme carré gris autour de la carte.
+    
+    Les cercles explorés seront ensuite dessinés
+    au-dessus pour révéler les endroits découverts.
+    =====================================================
+    */
+
+    const fogLayer = L.rectangle(
+      [
+        [-90, -180],
+        [90, 180]
+      ],
+      {
+        color: "#555555",
+        fillColor: "#555555",
+        fillOpacity: 0.82,
+        weight: 0,
+        interactive: false
+      }
+    ).addTo(map);
+
+
+    /*
+    =====================================================
+    AFFICHAGE DES ZONES EXPLOREES
+    =====================================================
+    */
 
     function drawExploredZones() {
 
@@ -156,24 +188,39 @@
           [zone.lat, zone.lng],
           {
             radius: EXPLORATION_RADIUS,
+
             color: "#2ecc71",
+
             fillColor: "#2ecc71",
-            fillOpacity: 0.28,
-            weight: 1
+
+            fillOpacity: 0.15,
+
+            weight: 1,
+
+            interactive: false
           }
         ).addTo(exploredLayer);
 
       });
 
+      /*
+      IMPORTANT :
+
+      On remet le brouillard derrière les zones explorées.
+      */
+
+      fogLayer.bringToBack();
+
     }
+
 
     drawExploredZones();
 
 
     /*
-      =====================================================
-      DISTANCE ENTRE DEUX POSITIONS
-      =====================================================
+    =====================================================
+    DISTANCE GPS
+    =====================================================
     */
 
     function distanceInMeters(
@@ -211,9 +258,9 @@
 
 
     /*
-      =====================================================
-      AJOUT D'UNE ZONE EXPLOREE
-      =====================================================
+    =====================================================
+    AJOUT D'UNE ZONE EXPLOREE
+    =====================================================
     */
 
     function addExploredZone(
@@ -221,7 +268,6 @@
       longitude
     ) {
 
-      // Vérifie si cette zone a déjà été explorée
       for (const zone of exploredZones) {
 
         const distance =
@@ -235,28 +281,40 @@
         if (distance < MIN_DISTANCE) {
           return;
         }
+
       }
 
-      // Nouvelle zone
+
       exploredZones.push({
         lat: latitude,
         lng: longitude
       });
 
-      // Sauvegarde sur le téléphone
+
       localStorage.setItem(
         "exploredZones",
         JSON.stringify(exploredZones)
       );
+
 
       drawExploredZones();
     }
 
 
     /*
-      =====================================================
-      GPS
-      =====================================================
+    =====================================================
+    POSITION
+    =====================================================
+    */
+
+    let positionMarker = null;
+    let explorationCircle = null;
+
+
+    /*
+    =====================================================
+    GPS
+    =====================================================
     */
 
     function updatePosition(position) {
@@ -275,7 +333,7 @@
 
 
       /*
-        MARQUEUR
+      MARQUEUR
       */
 
       if (!positionMarker) {
@@ -294,6 +352,7 @@
           .addTo(map)
           .bindPopup("📍 Tu es ici");
 
+
         map.setView(
           currentPosition,
           18
@@ -309,7 +368,7 @@
 
 
       /*
-        CERCLE DE 50 METRES
+      CERCLE DE 50 METRES
       */
 
       if (!explorationCircle) {
@@ -319,9 +378,13 @@
             currentPosition,
             {
               radius: EXPLORATION_RADIUS,
+
               color: "#007bff",
+
               fillColor: "#007bff",
+
               fillOpacity: 0.10,
+
               weight: 2
             }
           )
@@ -337,7 +400,7 @@
 
 
       /*
-        ENREGISTRE LA ZONE
+      ENREGISTRE LA ZONE
       */
 
       addExploredZone(
@@ -347,7 +410,7 @@
 
 
       /*
-        MESSAGE
+      TEXTE
       */
 
       document.getElementById(
@@ -362,9 +425,9 @@
 
 
     /*
-      =====================================================
-      ERREUR GPS
-      =====================================================
+    =====================================================
+    ERREUR GPS
+    =====================================================
     */
 
     function gpsError(error) {
@@ -379,9 +442,9 @@
 
 
     /*
-      =====================================================
-      DEMARRAGE GPS
-      =====================================================
+    =====================================================
+    DEMARRAGE GPS
+    =====================================================
     */
 
     function startGPS() {
@@ -396,6 +459,7 @@
         return;
       }
 
+
       navigator.geolocation.watchPosition(
         updatePosition,
         gpsError,
@@ -409,9 +473,9 @@
 
 
     /*
-      =====================================================
-      BOUTON POSITION
-      =====================================================
+    =====================================================
+    BOUTON POSITION
+    =====================================================
     */
 
     document
@@ -434,9 +498,9 @@
 
 
     /*
-      =====================================================
-      BOUTON EFFACER
-      =====================================================
+    =====================================================
+    BOUTON EFFACER
+    =====================================================
     */
 
     document
@@ -454,26 +518,31 @@
             return;
           }
 
+
           exploredZones = [];
+
 
           localStorage.removeItem(
             "exploredZones"
           );
 
+
           drawExploredZones();
+
 
           document.getElementById(
             "status"
           ).textContent =
             "🗺️ Exploration effacée";
+
         }
       );
 
 
     /*
-      =====================================================
-      SERVICE WORKER
-      =====================================================
+    =====================================================
+    SERVICE WORKER
+    =====================================================
     */
 
     if ("serviceWorker" in navigator) {
@@ -486,9 +555,9 @@
 
 
     /*
-      =====================================================
-      LANCEMENT
-      =====================================================
+    =====================================================
+    LANCEMENT
+    =====================================================
     */
 
     startGPS();
@@ -496,4 +565,4 @@
   </script>
 
 </body>
-  </html>
+</html>
