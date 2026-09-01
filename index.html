@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#222222">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Carte d'exploration</title>
+  <title>Exploration</title>
 
-  <!-- Leaflet : moteur de la carte -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#222222">
+
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  >
 
   <style>
     * {
@@ -45,6 +45,7 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.25);
       font-size: 14px;
       text-align: center;
+      white-space: nowrap;
     }
 
     #locate {
@@ -60,38 +61,59 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.3);
       font-size: 25px;
     }
+
+    #reset {
+      position: absolute;
+      bottom: 25px;
+      left: 20px;
+      z-index: 1000;
+      border: none;
+      border-radius: 20px;
+      padding: 12px 16px;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-size: 14px;
+    }
   </style>
 </head>
-  <script>
-    if ("serviceWorker" in navigator) {
-navigator.serviceWorker.register("sw.js");
-  }
-  </script>
+
 <body>
 
   <div id="status">📍 Recherche de ta position...</div>
 
   <button id="locate">📍</button>
+  <button id="reset">🗑️ Effacer</button>
 
   <div id="map"></div>
 
-  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // Rayon d'exploration :
+
+    /*
+      =====================================================
+      CONFIGURATION
+      =====================================================
+    */
+
     // 50 mètres de diamètre = 25 mètres de rayon
     const EXPLORATION_RADIUS = 25;
 
-    let map;
-    let positionMarker;
-    let accuracyCircle;
-    let explorationCircle;
+    // Distance minimale entre deux zones enregistrées
+    const MIN_DISTANCE = 15;
 
-    // Création de la carte
-    map = L.map("map").setView([46.603354, 1.888334], 6);
 
-    // Carte OpenStreetMap
+    /*
+      =====================================================
+      CARTE
+      =====================================================
+    */
+
+    const map = L.map("map").setView(
+      [46.603354, 1.888334],
+      6
+    );
+
     L.tileLayer(
       "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
@@ -100,84 +122,276 @@ navigator.serviceWorker.register("sw.js");
       }
     ).addTo(map);
 
-    // Fonction appelée lorsque le GPS trouve ta position
+
+    /*
+      =====================================================
+      VARIABLES
+      =====================================================
+    */
+
+    let positionMarker = null;
+    let explorationCircle = null;
+
+    let exploredZones =
+      JSON.parse(
+        localStorage.getItem("exploredZones") || "[]"
+      );
+
+
+    /*
+      =====================================================
+      AFFICHAGE DES ZONES EXPLOREES
+      =====================================================
+    */
+
+    const exploredLayer = L.layerGroup().addTo(map);
+
+    function drawExploredZones() {
+
+      exploredLayer.clearLayers();
+
+      exploredZones.forEach(zone => {
+
+        L.circle(
+          [zone.lat, zone.lng],
+          {
+            radius: EXPLORATION_RADIUS,
+            color: "#2ecc71",
+            fillColor: "#2ecc71",
+            fillOpacity: 0.28,
+            weight: 1
+          }
+        ).addTo(exploredLayer);
+
+      });
+
+    }
+
+    drawExploredZones();
+
+
+    /*
+      =====================================================
+      DISTANCE ENTRE DEUX POSITIONS
+      =====================================================
+    */
+
+    function distanceInMeters(
+      lat1,
+      lon1,
+      lat2,
+      lon2
+    ) {
+
+      const R = 6371000;
+
+      const dLat =
+        (lat2 - lat1) * Math.PI / 180;
+
+      const dLon =
+        (lon2 - lon1) * Math.PI / 180;
+
+      const a =
+        Math.sin(dLat / 2) *
+        Math.sin(dLat / 2) +
+
+        Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+      const c =
+        2 * Math.atan2(
+          Math.sqrt(a),
+          Math.sqrt(1 - a)
+        );
+
+      return R * c;
+    }
+
+
+    /*
+      =====================================================
+      AJOUT D'UNE ZONE EXPLOREE
+      =====================================================
+    */
+
+    function addExploredZone(
+      latitude,
+      longitude
+    ) {
+
+      // Vérifie si cette zone a déjà été explorée
+      for (const zone of exploredZones) {
+
+        const distance =
+          distanceInMeters(
+            latitude,
+            longitude,
+            zone.lat,
+            zone.lng
+          );
+
+        if (distance < MIN_DISTANCE) {
+          return;
+        }
+      }
+
+      // Nouvelle zone
+      exploredZones.push({
+        lat: latitude,
+        lng: longitude
+      });
+
+      // Sauvegarde sur le téléphone
+      localStorage.setItem(
+        "exploredZones",
+        JSON.stringify(exploredZones)
+      );
+
+      drawExploredZones();
+    }
+
+
+    /*
+      =====================================================
+      GPS
+      =====================================================
+    */
+
     function updatePosition(position) {
 
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      const accuracy = position.coords.accuracy;
+      const latitude =
+        position.coords.latitude;
 
-      const currentPosition = [latitude, longitude];
+      const longitude =
+        position.coords.longitude;
 
-      // Première fois : création du marqueur
+      const accuracy =
+        position.coords.accuracy;
+
+      const currentPosition =
+        [latitude, longitude];
+
+
+      /*
+        MARQUEUR
+      */
+
       if (!positionMarker) {
 
-        positionMarker = L.marker(currentPosition)
+        positionMarker =
+          L.circleMarker(
+            currentPosition,
+            {
+              radius: 7,
+              color: "#ffffff",
+              weight: 3,
+              fillColor: "#007bff",
+              fillOpacity: 1
+            }
+          )
           .addTo(map)
           .bindPopup("📍 Tu es ici");
 
-        map.setView(currentPosition, 18);
+        map.setView(
+          currentPosition,
+          18
+        );
 
       } else {
 
-        positionMarker.setLatLng(currentPosition);
+        positionMarker.setLatLng(
+          currentPosition
+        );
 
       }
 
-      // Cercle indiquant la précision du GPS
-      if (!accuracyCircle) {
 
-        accuracyCircle = L.circle(currentPosition, {
-          radius: accuracy,
-          color: "#3388ff",
-          fillOpacity: 0.08,
-          weight: 1
-        }).addTo(map);
+      /*
+        CERCLE DE 50 METRES
+      */
 
-      } else {
-
-        accuracyCircle.setLatLng(currentPosition);
-        accuracyCircle.setRadius(accuracy);
-
-      }
-
-      // Ton cercle d'exploration de 50 m de diamètre
       if (!explorationCircle) {
 
-        explorationCircle = L.circle(currentPosition, {
-          radius: EXPLORATION_RADIUS,
-          color: "#00aaff",
-          fillColor: "#00aaff",
-          fillOpacity: 0.18,
-          weight: 2
-        }).addTo(map);
+        explorationCircle =
+          L.circle(
+            currentPosition,
+            {
+              radius: EXPLORATION_RADIUS,
+              color: "#007bff",
+              fillColor: "#007bff",
+              fillOpacity: 0.10,
+              weight: 2
+            }
+          )
+          .addTo(map);
 
       } else {
 
-        explorationCircle.setLatLng(currentPosition);
+        explorationCircle.setLatLng(
+          currentPosition
+        );
 
       }
 
-      document.getElementById("status").textContent =
-        "🟢 GPS actif • précision ±" + Math.round(accuracy) + " m";
+
+      /*
+        ENREGISTRE LA ZONE
+      */
+
+      addExploredZone(
+        latitude,
+        longitude
+      );
+
+
+      /*
+        MESSAGE
+      */
+
+      document.getElementById(
+        "status"
+      ).textContent =
+        "🟢 GPS actif • précision ±" +
+        Math.round(accuracy) +
+        " m • " +
+        exploredZones.length +
+        " zones explorées";
     }
 
-    // Erreur GPS
+
+    /*
+      =====================================================
+      ERREUR GPS
+      =====================================================
+    */
+
     function gpsError(error) {
 
-      document.getElementById("status").textContent =
-        "❌ Impossible d'obtenir ta position GPS";
-
       console.log(error);
+
+      document.getElementById(
+        "status"
+      ).textContent =
+        "❌ Impossible d'obtenir ta position GPS";
     }
 
-    // Démarrage du GPS
+
+    /*
+      =====================================================
+      DEMARRAGE GPS
+      =====================================================
+    */
+
     function startGPS() {
 
       if (!navigator.geolocation) {
 
-        document.getElementById("status").textContent =
-          "❌ Ton téléphone ne permet pas la géolocalisation";
+        document.getElementById(
+          "status"
+        ).textContent =
+          "❌ Géolocalisation non disponible";
 
         return;
       }
@@ -193,21 +407,93 @@ navigator.serviceWorker.register("sw.js");
       );
     }
 
-    // Bouton pour revenir à sa position
-    document.getElementById("locate").addEventListener("click", function() {
 
-      if (positionMarker) {
+    /*
+      =====================================================
+      BOUTON POSITION
+      =====================================================
+    */
 
-        map.setView(
-          positionMarker.getLatLng(),
-          18
-        );
+    document
+      .getElementById("locate")
+      .addEventListener(
+        "click",
+        function() {
 
-      }
-    });
+          if (positionMarker) {
+
+            map.setView(
+              positionMarker.getLatLng(),
+              18
+            );
+
+          }
+
+        }
+      );
+
+
+    /*
+      =====================================================
+      BOUTON EFFACER
+      =====================================================
+    */
+
+    document
+      .getElementById("reset")
+      .addEventListener(
+        "click",
+        function() {
+
+          const confirmation =
+            confirm(
+              "Effacer toute ton exploration ?"
+            );
+
+          if (!confirmation) {
+            return;
+          }
+
+          exploredZones = [];
+
+          localStorage.removeItem(
+            "exploredZones"
+          );
+
+          drawExploredZones();
+
+          document.getElementById(
+            "status"
+          ).textContent =
+            "🗺️ Exploration effacée";
+        }
+      );
+
+
+    /*
+      =====================================================
+      SERVICE WORKER
+      =====================================================
+    */
+
+    if ("serviceWorker" in navigator) {
+
+      navigator.serviceWorker.register(
+        "sw.js"
+      );
+
+    }
+
+
+    /*
+      =====================================================
+      LANCEMENT
+      =====================================================
+    */
 
     startGPS();
+
   </script>
 
 </body>
-</html>
+  </html>
